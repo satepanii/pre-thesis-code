@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import joblib
 
+# test
+
 st.set_page_config(
     page_title="Diabetes Risk Prediction",
     layout="centered"
