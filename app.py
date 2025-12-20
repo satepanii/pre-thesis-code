@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-# test
+# test push lagi hehe
 
 st.set_page_config(
     page_title="Diabetes Risk Prediction",
