@@ -1,7 +1,7 @@
 # ======================================================
-# Multiclass Diabetes Risk Prediction
+# Multiclass Diabetes Risk Prediction (BASELINE)
 # Normal (0) - Prediabetes (1) - Diabetes (2)
-# Random Forest + SMOTE + K-Fold Cross Validation
+# Random Forest WITHOUT SMOTE
 # ======================================================
 
 import warnings
@@ -14,6 +14,7 @@ import joblib
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, label_binarize
+from sklearn.pipeline import Pipeline
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
@@ -22,9 +23,6 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_auc_score
 )
-
-from imblearn.pipeline import Pipeline
-from imblearn.over_sampling import SMOTE
 
 # ======================================================
 # 1. LOAD DATASET
@@ -48,7 +46,6 @@ df.columns = (
 # ======================================================
 # 3. ENCODE CATEGORICAL VARIABLES
 # ======================================================
-# Gender
 df["GENDER"] = (
     df["GENDER"]
     .astype(str)
@@ -56,7 +53,6 @@ df["GENDER"] = (
     .map({"M": 1, "F": 0})
 )
 
-# Target (MULTICLASS)
 df["CLASS"] = (
     df["CLASS"]
     .astype(str)
@@ -91,7 +87,7 @@ df = df.drop(columns=id_cols, errors="ignore")
 
 # ======================================================
 # 6. SPLIT FEATURES & TARGET
-#    (HbA1c dropped → risk analysis, not diagnosis)
+#    (HbA1c dropped → risk analysis)
 # ======================================================
 X = df.drop(["CLASS", "HBA1C"], axis=1)
 y = df["CLASS"]
@@ -99,12 +95,10 @@ y = df["CLASS"]
 print("\nTraining features:")
 print(X.columns.tolist())
 
-assert "CLASS" not in X.columns, "❌ ERROR: CLASS leakage detected!"
-
 # ======================================================
-# 7. TRAIN / TEST SPLIT (HOLD-OUT)
+# 7. TRAIN / TEST SPLIT
 # ======================================================
-X_train_full, X_test, y_train_full, y_test = train_test_split(
+X_train, X_test, y_train, y_test = train_test_split(
     X,
     y,
     test_size=0.2,
@@ -112,27 +106,26 @@ X_train_full, X_test, y_train_full, y_test = train_test_split(
     random_state=42
 )
 
-print("\nTrain set (full):", X_train_full.shape)
-print("Test set:", X_test.shape)
+print("\nTrain set:", X_train.shape)
+print("Test set :", X_test.shape)
 
 # ======================================================
-# 8. PIPELINE (SMOTE APPLIED ONLY DURING TRAINING)
+# 8. PIPELINE (NO SMOTE)
 # ======================================================
 pipeline = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
     ("scaler", StandardScaler()),
-    ("smote", SMOTE(random_state=42)),
     ("rf", RandomForestClassifier(
         n_estimators=300,
-        random_state=42
+        random_state=42,
+        class_weight="balanced"  # penting karena tidak pakai SMOTE
     ))
 ])
 
 # ======================================================
 # 9. STRATIFIED K-FOLD CROSS VALIDATION
-#    (≈ 600 training / 200 validation per fold)
 # ======================================================
-print("\n=== STRATIFIED K-FOLD CROSS VALIDATION (SMOTE) ===")
+print("\n=== STRATIFIED K-FOLD CROSS VALIDATION (NO SMOTE) ===")
 
 skf = StratifiedKFold(
     n_splits=4,
@@ -142,8 +135,8 @@ skf = StratifiedKFold(
 
 cv_f1_macro = cross_val_score(
     pipeline,
-    X_train_full,
-    y_train_full,
+    X_train,
+    y_train,
     cv=skf,
     scoring="f1_macro"
 )
@@ -152,17 +145,17 @@ print(f"CV F1 Macro (mean): {cv_f1_macro.mean():.3f}")
 print(f"CV F1 Macro (std) : {cv_f1_macro.std():.3f}")
 
 # ======================================================
-# 10. TRAIN FINAL MODEL (ON FULL TRAINING SET)
+# 10. TRAIN FINAL MODEL
 # ======================================================
-pipeline.fit(X_train_full, y_train_full)
+pipeline.fit(X_train, y_train)
 
 # ======================================================
-# 11. FINAL EVALUATION ON TEST SET (NO SMOTE)
+# 11. EVALUATION ON TEST SET
 # ======================================================
 y_pred = pipeline.predict(X_test)
 y_prob = pipeline.predict_proba(X_test)
 
-print("\n=== TEST SET PERFORMANCE ===")
+print("\n=== TEST SET PERFORMANCE (NO SMOTE) ===")
 
 print(f"Accuracy        : {accuracy_score(y_test, y_pred):.3f}")
 print(f"F1-score (Macro): {f1_score(y_test, y_pred, average='macro'):.3f}")
@@ -178,7 +171,7 @@ print(classification_report(
 print("Confusion Matrix:")
 print(confusion_matrix(y_test, y_pred))
 
-# Multiclass ROC AUC (One-vs-Rest)
+# ROC AUC
 y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
 roc_auc = roc_auc_score(
     y_test_bin,
@@ -192,7 +185,7 @@ print(f"ROC AUC (OvR)   : {roc_auc:.3f}")
 # ======================================================
 # 12. SAVE MODEL
 # ======================================================
-MODEL_PATH = "rf_diabetes_multiclass.joblib"
+MODEL_PATH = "rf_diabetes_multiclass_no_smote.joblib"
 joblib.dump(pipeline, MODEL_PATH)
 
 print(f"\n✅ Model saved as {MODEL_PATH}")
