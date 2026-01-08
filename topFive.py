@@ -1,13 +1,7 @@
 # ======================================================
 # Multiclass Diabetes Risk Prediction
-# Random Forest WITH SMOTE
-# + HbA1c INCLUDED
-# + NA CHECK
-# + SUMMARY STATISTICS
-# + NORMALITY CHECK
-# + EXACT COUNTS ON ALL CATEGORICAL DIAGRAMS
-# + CORRELATION MATRIX (INCLUDING CLASS)
-# + HbA1c DISTRIBUTION (QUARTILES)
+# TOP 5 FEATURES (Highest Correlation to CLASS)
+# Random Forest + SMOTE + Stratified K-Fold
 # ======================================================
 
 import warnings
@@ -18,7 +12,6 @@ import numpy as np
 import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
-import scipy.stats as stats
 
 from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.impute import SimpleImputer
@@ -39,16 +32,7 @@ df = pd.read_csv("data/diabetes.csv")
 print("Dataset loaded:", df.shape)
 
 # ======================================================
-# 2. RAW DATA CHECK
-# ======================================================
-print("\n=== MISSING VALUE CHECK (RAW DATA) ===")
-print(df.isna().sum()[df.isna().sum() > 0])
-
-print("\n=== SUMMARY STATISTICS (RAW DATA) ===")
-print(df.describe(include="all"))
-
-# ======================================================
-# 3. NORMALIZE COLUMN NAMES
+# 2. NORMALIZE COLUMN NAMES
 # ======================================================
 df.columns = (
     df.columns.str.strip()
@@ -58,106 +42,58 @@ df.columns = (
 )
 
 # ======================================================
-# 4. ENCODE VARIABLES
+# 3. ENCODE CATEGORICAL VARIABLES
 # ======================================================
 df["GENDER"] = df["GENDER"].astype(str).str.upper().map({"M": 1, "F": 0})
-df["CLASS"] = df["CLASS"].astype(str).str.upper().map({"N": 0, "P": 1, "Y": 2})
+df["CLASS"]  = df["CLASS"].astype(str).str.upper().map({"N": 0, "P": 1, "Y": 2})
 
 df = df.dropna(subset=["CLASS"])
 df["CLASS"] = df["CLASS"].astype(int)
 
+print("\nClass distribution:")
+print(df["CLASS"].value_counts().sort_index())
+
 # ======================================================
-# 5. NUMERIC CONVERSION
+# 4. NUMERIC CONVERSION
 # ======================================================
 for col in df.columns:
     if col not in ["CLASS", "GENDER"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
 # ======================================================
-# 6. DROP ID COLUMNS
+# 5. DROP ID COLUMNS
 # ======================================================
 df = df.drop(columns=[c for c in df.columns if "ID" in c or "NO" in c], errors="ignore")
 
 # ======================================================
-# 7. FEATURE LIST (ALL FEATURES, HbA1c INCLUDED)
+# 6. NUMERIC FEATURES CANDIDATES
 # ======================================================
 numeric_features = [
     "AGE","BMI","UREA","CR","CHOL","TG","HDL","LDL","VLDL","HBA1C"
 ]
 
 # ======================================================
-# ========================= EDA ========================
+# 7. SELECT TOP 5 FEATURES BY CORRELATION TO CLASS
 # ======================================================
+corr_matrix = df[numeric_features + ["CLASS"]].corr()
 
-# ---------- CLASS DISTRIBUTION ----------
-plt.figure(figsize=(6,4))
-ax = sns.countplot(x="CLASS", data=df, palette="Set2")
-plt.xticks([0,1,2], ["Normal","Prediabetes","Diabetes"])
-for c in ax.containers:
-    ax.bar_label(c, fmt="%d")
-plt.title("Class Distribution")
-plt.tight_layout()
-plt.show()
-
-# ---------- HbA1c DISTRIBUTION (QUARTILES + COUNTS) ----------
-df["HBA1C_GROUP"] = pd.qcut(df["HBA1C"], q=4, duplicates="drop")
-
-hba1c_table = pd.crosstab(df["HBA1C_GROUP"], df["CLASS"])
-hba1c_table.columns = ["Normal","Prediabetes","Diabetes"]
-
-print("\nHbA1c Distribution by Quartiles:")
-print(hba1c_table)
-
-plt.figure(figsize=(10,5))
-ax = sns.countplot(
-    data=df,
-    x="HBA1C_GROUP",
-    hue="CLASS",
-    palette="Set2"
+corr_to_class = (
+    corr_matrix["CLASS"]
+    .drop("CLASS")
+    .abs()
+    .sort_values(ascending=False)
 )
-for c in ax.containers:
-    ax.bar_label(c, fmt="%d")
 
-plt.xlabel("HbA1c Group (Quartiles)")
-plt.ylabel("Number of Patients")
-plt.title("Diabetes Distribution by HbA1c")
-plt.legend(title="CLASS", labels=["Normal","Prediabetes","Diabetes"])
-plt.tight_layout()
-plt.show()
+top5_features = corr_to_class.head(5).index.tolist()
 
-# ======================================================
-# 8. CORRELATION MATRIX (INCLUDING CLASS)
-# ======================================================
-corr_features = numeric_features + ["CLASS"]
-corr_matrix = df[corr_features].corr(method="pearson")
-
-plt.figure(figsize=(12,10))
-sns.heatmap(
-    corr_matrix,
-    annot=True,
-    fmt=".2f",
-    cmap="coolwarm",
-    linewidths=0.5,
-    square=True
-)
-plt.title("Feature Correlation Heatmap (Including CLASS)")
-plt.tight_layout()
-plt.show()
-
-# ======================================================
-# 9. NORMALITY CHECK
-# ======================================================
-for col in numeric_features:
-    plt.figure(figsize=(6,4))
-    sns.histplot(df[col], kde=True, bins=30)
-    plt.title(f"Distribution of {col}")
-    plt.tight_layout()
-    plt.show()
+print("\n=== TOP 5 FEATURES BY CORRELATION TO CLASS ===")
+for i, f in enumerate(top5_features, start=1):
+    print(f"{i}. {f} | Corr = {corr_to_class[f]:.3f}")
 
 # ======================================================
 # =================== MACHINE LEARNING =================
 # ======================================================
-X = df[numeric_features]
+X = df[top5_features]
 y = df["CLASS"]
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -167,7 +103,6 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
-# ---------- PIPELINE WITH SMOTE ----------
 pipeline = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
     ("scaler", StandardScaler()),
@@ -179,10 +114,14 @@ pipeline = Pipeline([
     ))
 ])
 
-# ---------- STRATIFIED K-FOLD ----------
+# ======================================================
+# 8. STRATIFIED K-FOLD CROSS VALIDATION
+# ======================================================
 skf = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
 
-print("\n=== STRATIFIED K-FOLD RESULTS (WITH SMOTE) ===")
+cv_acc, cv_f1 = [], []
+
+print("\n=== STRATIFIED K-FOLD RESULTS (TOP 5 FEATURES) ===")
 for fold, (train_idx, val_idx) in enumerate(skf.split(X_train, y_train), start=1):
     pipeline.fit(X_train.iloc[train_idx], y_train.iloc[train_idx])
     y_val_pred = pipeline.predict(X_train.iloc[val_idx])
@@ -190,26 +129,43 @@ for fold, (train_idx, val_idx) in enumerate(skf.split(X_train, y_train), start=1
     acc = accuracy_score(y_train.iloc[val_idx], y_val_pred)
     f1  = f1_score(y_train.iloc[val_idx], y_val_pred, average="macro")
 
+    cv_acc.append(acc)
+    cv_f1.append(f1)
+
     print(f"Fold {fold} | Accuracy: {acc:.3f} | F1 Macro: {f1:.3f}")
 
-# ---------- TRAIN FINAL MODEL ----------
+print("\n=== CROSS-VALIDATION SUMMARY ===")
+print(f"Mean Accuracy : {np.mean(cv_acc):.3f}")
+print(f"Std Accuracy  : {np.std(cv_acc):.3f}")
+print(f"Mean F1 Macro : {np.mean(cv_f1):.3f}")
+print(f"Std F1 Macro  : {np.std(cv_f1):.3f}")
+
+# ======================================================
+# 9. TRAIN FINAL MODEL
+# ======================================================
 pipeline.fit(X_train, y_train)
 
-# ---------- TEST EVALUATION ----------
+# ======================================================
+# 10. TEST EVALUATION
+# ======================================================
 y_pred = pipeline.predict(X_test)
 y_prob = pipeline.predict_proba(X_test)
 
-print("\n=== TEST SET PERFORMANCE (WITH SMOTE) ===")
+print("\n=== TEST SET PERFORMANCE (TOP 5 FEATURES) ===")
 print(f"Accuracy        : {accuracy_score(y_test,y_pred):.3f}")
 print(f"F1-score (Macro): {f1_score(y_test,y_pred,average='macro'):.3f}")
+print(f"F1-score (Wght) : {f1_score(y_test,y_pred,average='weighted'):.3f}")
 
 print("\nClassification Report:")
 print(classification_report(
-    y_test, y_pred,
+    y_test,
+    y_pred,
     target_names=["Normal","Prediabetes","Diabetes"]
 ))
 
-# ---------- CONFUSION MATRIX ----------
+# ======================================================
+# 11. CONFUSION MATRIX
+# ======================================================
 cm = confusion_matrix(y_test, y_pred)
 
 plt.figure(figsize=(6,5))
@@ -218,20 +174,31 @@ sns.heatmap(
     xticklabels=["Normal","Prediabetes","Diabetes"],
     yticklabels=["Normal","Prediabetes","Diabetes"]
 )
-plt.title("Confusion Matrix (With SMOTE)")
+plt.title("Confusion Matrix (Top 5 Features)")
 plt.xlabel("Predicted")
 plt.ylabel("Actual")
 plt.tight_layout()
 plt.show()
 
-# ---------- ROC AUC ----------
+# ======================================================
+# 12. ROC AUC (OvR)
+# ======================================================
 y_test_bin = label_binarize(y_test, classes=[0,1,2])
 roc_auc = roc_auc_score(
-    y_test_bin, y_prob,
-    average="macro", multi_class="ovr"
+    y_test_bin,
+    y_prob,
+    average="macro",
+    multi_class="ovr"
 )
+
 print(f"ROC AUC (OvR): {roc_auc:.3f}")
 
-# ---------- SAVE MODEL ----------
-joblib.dump(pipeline, "rf_diabetes_with_smote_hba1c.joblib")
-print("\n✅ Model saved successfully (WITH SMOTE)")
+# ======================================================
+# 13. SAVE MODEL
+# ======================================================
+joblib.dump(
+    pipeline,
+    "rf_diabetes_top5_correlation_features.joblib"
+)
+
+print("\n✅ Model saved successfully (TOP 5 FEATURES)")

@@ -2,14 +2,9 @@ import streamlit as st
 import pandas as pd
 import joblib
 
-<<<<<<< HEAD
 # ======================================================
 # PAGE CONFIG
-# ======================================================
-=======
-# test push lagi hehe
 
->>>>>>> e0dd9ae721ea9666e853c293a79c8a1edcda9916
 st.set_page_config(
     page_title="Diabetes Risk Analysis",
     layout="centered"
