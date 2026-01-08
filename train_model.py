@@ -2,6 +2,11 @@
 # Multiclass Diabetes Risk Prediction
 # Normal (0) - Prediabetes (1) - Diabetes (2)
 # Random Forest + SMOTE + K-Fold Cross Validation
+# + EDA Visualizations
+# + Age-based Analysis
+# + Auto Feature-based Analysis (ALL FEATURES)
+# + Feature Correlation Heatmap (WITH VALUES)
+# + Confusion Matrix Heatmap
 # ======================================================
 
 import warnings
@@ -10,6 +15,9 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import numpy as np
 import joblib
+
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.impute import SimpleImputer
@@ -48,7 +56,6 @@ df.columns = (
 # ======================================================
 # 3. ENCODE CATEGORICAL VARIABLES
 # ======================================================
-# Gender
 df["GENDER"] = (
     df["GENDER"]
     .astype(str)
@@ -56,16 +63,11 @@ df["GENDER"] = (
     .map({"M": 1, "F": 0})
 )
 
-# Target (MULTICLASS)
 df["CLASS"] = (
     df["CLASS"]
     .astype(str)
     .str.upper()
-    .map({
-        "N": 0,  # Normal
-        "P": 1,  # Prediabetes
-        "Y": 2   # Diabetes
-    })
+    .map({"N": 0, "P": 1, "Y": 2})
 )
 
 df = df.dropna(subset=["CLASS"])
@@ -90,8 +92,142 @@ id_cols = [c for c in df.columns if "ID" in c or "NO" in c]
 df = df.drop(columns=id_cols, errors="ignore")
 
 # ======================================================
-# 6. SPLIT FEATURES & TARGET
-#    (HbA1c dropped → risk analysis, not diagnosis)
+# ======================= EDA ==========================
+# ======================================================
+
+# ------------------------------------------------------
+# EDA 1: CLASS DISTRIBUTION
+# ------------------------------------------------------
+plt.figure(figsize=(6, 4))
+sns.countplot(x="CLASS", data=df, palette="Set2")
+plt.xticks([0, 1, 2], ["Normal", "Prediabetes", "Diabetes"])
+plt.title("Class Distribution")
+plt.tight_layout()
+plt.show()
+
+# ------------------------------------------------------
+# EDA 2: FEATURE DISTRIBUTIONS
+# ------------------------------------------------------
+numeric_features = [
+    col for col in df.columns
+    if col not in ["CLASS", "GENDER", "HBA1C"]
+]
+
+df[numeric_features].hist(
+    bins=30,
+    figsize=(14, 10),
+    edgecolor="black"
+)
+
+plt.suptitle("Feature Distributions", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# ------------------------------------------------------
+# EDA 3: BOXPLOT BMI vs CLASS
+# ------------------------------------------------------
+plt.figure(figsize=(8, 5))
+sns.boxplot(x="CLASS", y="BMI", data=df, palette="Set3")
+plt.xticks([0, 1, 2], ["Normal", "Prediabetes", "Diabetes"])
+plt.title("BMI Distribution by Class")
+plt.tight_layout()
+plt.show()
+
+# ------------------------------------------------------
+# EDA 4: AGE GROUP vs DIABETES STATUS
+# ------------------------------------------------------
+age_bins = [0, 30, 40, 50, 60, 120]
+age_labels = ["<30", "30-39", "40-49", "50-59", "60+"]
+
+df["AGE_GROUP"] = pd.cut(df["AGE"], bins=age_bins, labels=age_labels, right=False)
+
+age_table = pd.crosstab(df["AGE_GROUP"], df["CLASS"])
+age_table.columns = ["Normal", "Prediabetes", "Diabetes"]
+
+print("\nDiabetes Distribution by Age Group:")
+print(age_table)
+
+plt.figure(figsize=(8, 5))
+ax = sns.countplot(data=df, x="AGE_GROUP", hue="CLASS", palette="Set2")
+
+for container in ax.containers:
+    ax.bar_label(container, fmt="%d", fontsize=9)
+
+plt.legend(title="Class", labels=["Normal", "Prediabetes", "Diabetes"])
+plt.title("Diabetes Distribution by Age Group")
+plt.tight_layout()
+plt.show()
+
+# ------------------------------------------------------
+# EDA 5: AUTO ANALYSIS FOR ALL NUMERIC FEATURES
+# ------------------------------------------------------
+print("\n===== AUTO FEATURE-BASED EDA (ALL FEATURES) =====")
+
+for feature in numeric_features:
+    if feature in ["AGE"]:
+        continue
+
+    print(f"\n--- {feature} vs CLASS ---")
+
+    if df[feature].isna().all():
+        print("Skipped (all NaN)")
+        continue
+
+    try:
+        df[f"{feature}_GROUP"] = pd.qcut(
+            df[feature],
+            q=4,
+            duplicates="drop"
+        )
+    except ValueError:
+        print("Skipped (not enough unique values)")
+        continue
+
+    table = pd.crosstab(df[f"{feature}_GROUP"], df["CLASS"])
+    table.columns = ["Normal", "Prediabetes", "Diabetes"]
+    print(table)
+
+    plt.figure(figsize=(8, 5))
+    ax = sns.countplot(
+        data=df,
+        x=f"{feature}_GROUP",
+        hue="CLASS",
+        palette="Set2"
+    )
+
+    for container in ax.containers:
+        ax.bar_label(container, fmt="%d", fontsize=8)
+
+    plt.title(f"Diabetes Distribution by {feature}")
+    plt.xlabel(f"{feature} Group (Quartiles)")
+    plt.ylabel("Number of Patients")
+    plt.xticks(rotation=30)
+    plt.tight_layout()
+    plt.show()
+
+# ======================================================
+# 6. FEATURE CORRELATION HEATMAP (WITH VALUES)
+# ======================================================
+plt.figure(figsize=(13, 11))
+
+corr = df.drop(["CLASS", "HBA1C"], axis=1).corr()
+
+sns.heatmap(
+    corr,
+    annot=True,
+    fmt=".2f",
+    cmap="coolwarm",
+    linewidths=0.5,
+    square=True,
+    cbar_kws={"shrink": 0.8}
+)
+
+plt.title("Feature Correlation Heatmap (Risk Factors)", fontsize=14)
+plt.tight_layout()
+plt.show()
+
+# ======================================================
+# 7. SPLIT FEATURES & TARGET
 # ======================================================
 X = df.drop(["CLASS", "HBA1C"], axis=1)
 y = df["CLASS"]
@@ -99,24 +235,15 @@ y = df["CLASS"]
 print("\nTraining features:")
 print(X.columns.tolist())
 
-assert "CLASS" not in X.columns, "❌ ERROR: CLASS leakage detected!"
-
-# ======================================================
-# 7. TRAIN / TEST SPLIT (HOLD-OUT)
-# ======================================================
 X_train_full, X_test, y_train_full, y_test = train_test_split(
-    X,
-    y,
+    X, y,
     test_size=0.2,
     stratify=y,
     random_state=42
 )
 
-print("\nTrain set (full):", X_train_full.shape)
-print("Test set:", X_test.shape)
-
 # ======================================================
-# 8. PIPELINE (SMOTE APPLIED ONLY DURING TRAINING)
+# 8. PIPELINE (SMOTE ONLY ON TRAINING)
 # ======================================================
 pipeline = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
@@ -124,21 +251,17 @@ pipeline = Pipeline([
     ("smote", SMOTE(random_state=42)),
     ("rf", RandomForestClassifier(
         n_estimators=300,
-        random_state=42
+        random_state=42,
+        n_jobs=-1
     ))
 ])
 
 # ======================================================
 # 9. STRATIFIED K-FOLD CROSS VALIDATION
-#    (≈ 600 training / 200 validation per fold)
 # ======================================================
-print("\n=== STRATIFIED K-FOLD CROSS VALIDATION (SMOTE) ===")
+print("\n=== STRATIFIED K-FOLD CROSS VALIDATION ===")
 
-skf = StratifiedKFold(
-    n_splits=4,
-    shuffle=True,
-    random_state=42
-)
+skf = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
 
 cv_f1_macro = cross_val_score(
     pipeline,
@@ -152,18 +275,17 @@ print(f"CV F1 Macro (mean): {cv_f1_macro.mean():.3f}")
 print(f"CV F1 Macro (std) : {cv_f1_macro.std():.3f}")
 
 # ======================================================
-# 10. TRAIN FINAL MODEL (ON FULL TRAINING SET)
+# 10. TRAIN FINAL MODEL
 # ======================================================
 pipeline.fit(X_train_full, y_train_full)
 
 # ======================================================
-# 11. FINAL EVALUATION ON TEST SET (NO SMOTE)
+# 11. FINAL EVALUATION
 # ======================================================
 y_pred = pipeline.predict(X_test)
 y_prob = pipeline.predict_proba(X_test)
 
 print("\n=== TEST SET PERFORMANCE ===")
-
 print(f"Accuracy        : {accuracy_score(y_test, y_pred):.3f}")
 print(f"F1-score (Macro): {f1_score(y_test, y_pred, average='macro'):.3f}")
 print(f"F1-score (Wght) : {f1_score(y_test, y_pred, average='weighted'):.3f}")
@@ -175,10 +297,30 @@ print(classification_report(
     target_names=["Normal", "Prediabetes", "Diabetes"]
 ))
 
-print("Confusion Matrix:")
-print(confusion_matrix(y_test, y_pred))
+# ======================================================
+# 12. CONFUSION MATRIX HEATMAP
+# ======================================================
+cm = confusion_matrix(y_test, y_pred)
 
-# Multiclass ROC AUC (One-vs-Rest)
+plt.figure(figsize=(6, 5))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=["Normal", "Prediabetes", "Diabetes"],
+    yticklabels=["Normal", "Prediabetes", "Diabetes"]
+)
+
+plt.xlabel("Predicted Label")
+plt.ylabel("True Label")
+plt.title("Confusion Matrix Heatmap")
+plt.tight_layout()
+plt.show()
+
+# ======================================================
+# 13. ROC AUC (OvR)
+# ======================================================
 y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
 roc_auc = roc_auc_score(
     y_test_bin,
@@ -187,10 +329,10 @@ roc_auc = roc_auc_score(
     multi_class="ovr"
 )
 
-print(f"ROC AUC (OvR)   : {roc_auc:.3f}")
+print(f"ROC AUC (OvR): {roc_auc:.3f}")
 
 # ======================================================
-# 12. SAVE MODEL
+# 14. SAVE MODEL
 # ======================================================
 MODEL_PATH = "rf_diabetes_multiclass.joblib"
 joblib.dump(pipeline, MODEL_PATH)
