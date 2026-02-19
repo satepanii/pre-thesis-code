@@ -1,8 +1,7 @@
 # ======================================================
 # Multiclass Diabetes Risk Prediction
-# ALL FEATURES
+# WITHOUT HbA1c
 # Random Forest + SMOTE + Stratified K-Fold
-# NO EDA
 # ======================================================
 
 import warnings
@@ -20,6 +19,7 @@ from sklearn.metrics import (
     accuracy_score,
     f1_score,
     classification_report,
+    confusion_matrix,
     roc_auc_score
 )
 
@@ -31,6 +31,7 @@ from imblearn.over_sampling import SMOTE
 # ======================================================
 DATA_PATH = "data/diabetes.csv"
 df = pd.read_csv(DATA_PATH)
+
 print("Dataset loaded:", df.shape)
 
 # ======================================================
@@ -83,12 +84,12 @@ df = df.drop(
 )
 
 # ======================================================
-# 6. SPLIT FEATURES & TARGET (ALL FEATURES)
+# 6. SPLIT FEATURES & TARGET (WITHOUT HbA1c)
 # ======================================================
-X = df.drop("CLASS", axis=1)
+X = df.drop(["CLASS", "HBA1C"], axis=1, errors="ignore")
 y = df["CLASS"]
 
-print("\nTraining features:")
+print("\nTraining features (WITHOUT HbA1c):")
 print(X.columns.tolist())
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -146,7 +147,7 @@ pipeline.fit(X_train, y_train)
 y_pred = pipeline.predict(X_test)
 y_prob = pipeline.predict_proba(X_test)
 
-print("\n=== TEST SET PERFORMANCE (ALL FEATURES) ===")
+print("\n=== TEST SET PERFORMANCE (WITHOUT HbA1c) ===")
 print(f"Accuracy        : {accuracy_score(y_test, y_pred):.3f}")
 print(f"F1-score (Macro): {f1_score(y_test, y_pred, average='macro'):.3f}")
 print(f"F1-score (Wght): {f1_score(y_test, y_pred, average='weighted'):.3f}")
@@ -175,7 +176,7 @@ print(f"ROC AUC (OvR): {roc_auc:.3f}")
 # ======================================================
 # 12. SAVE MODEL
 # ======================================================
-MODEL_PATH = "rf_diabetes_all_features.joblib"
+MODEL_PATH = "rf_diabetes_without_hba1c.joblib"
 joblib.dump(pipeline, MODEL_PATH)
 
 print(f"\n✅ Model saved as {MODEL_PATH}")

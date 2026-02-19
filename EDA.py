@@ -1,12 +1,13 @@
 # ======================================================
-# Multiclass Diabetes Risk Prediction
-# Normal (0) - Prediabetes (1) - Diabetes (2)
-# Random Forest + SMOTE + K-Fold Cross Validation
-# + EDA Visualizations
-# + Age-based Analysis
-# + Auto Feature-based Analysis (ALL FEATURES)
-# + Feature Correlation Heatmap (WITH VALUES)
-# + Confusion Matrix Heatmap
+# EXPLORATORY DATA ANALYSIS (EDA)
+# Multiclass Diabetes Dataset
+# ======================================================
+# + NA Check
+# + Summary Statistics
+# + Class Distribution
+# + HbA1c Quartile Analysis
+# + Normality Check
+# + Correlation Matrix (Including CLASS)
 # ======================================================
 
 import warnings
@@ -14,32 +15,16 @@ warnings.filterwarnings("ignore")
 
 import pandas as pd
 import numpy as np
-import joblib
-
 import matplotlib.pyplot as plt
 import seaborn as sns
+import scipy.stats as stats
 
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
-from sklearn.impute import SimpleImputer
-from sklearn.preprocessing import StandardScaler, label_binarize
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    classification_report,
-    confusion_matrix,
-    roc_auc_score
-)
-
-from imblearn.pipeline import Pipeline
-from imblearn.over_sampling import SMOTE
+sns.set(style="whitegrid")
 
 # ======================================================
 # 1. LOAD DATASET
 # ======================================================
-DATA_PATH = "data/diabetes.csv"
-df = pd.read_csv(DATA_PATH)
-
+df = pd.read_csv("data/diabetes.csv")
 print("Dataset loaded:", df.shape)
 
 # ======================================================
@@ -90,7 +75,6 @@ for col in df.columns:
 # ======================================================
 id_cols = [c for c in df.columns if "ID" in c or "NO" in c]
 df = df.drop(columns=id_cols, errors="ignore")
-
 # ======================================================
 # ======================= EDA ==========================
 # ======================================================
@@ -110,7 +94,7 @@ plt.show()
 # ------------------------------------------------------
 numeric_features = [
     col for col in df.columns
-    if col not in ["CLASS", "GENDER", "HBA1C"]
+    if col not in ["CLASS", "GENDER"]
 ]
 
 df[numeric_features].hist(
@@ -225,116 +209,3 @@ sns.heatmap(
 plt.title("Feature Correlation Heatmap (Risk Factors)", fontsize=14)
 plt.tight_layout()
 plt.show()
-
-# ======================================================
-# 7. SPLIT FEATURES & TARGET
-# ======================================================
-X = df.drop(["CLASS", "HBA1C"], axis=1)
-y = df["CLASS"]
-
-print("\nTraining features:")
-print(X.columns.tolist())
-
-X_train_full, X_test, y_train_full, y_test = train_test_split(
-    X, y,
-    test_size=0.2,
-    stratify=y,
-    random_state=42
-)
-
-# ======================================================
-# 8. PIPELINE (SMOTE ONLY ON TRAINING)
-# ======================================================
-pipeline = Pipeline([
-    ("imputer", SimpleImputer(strategy="median")),
-    ("scaler", StandardScaler()),
-    ("smote", SMOTE(random_state=42)),
-    ("rf", RandomForestClassifier(
-        n_estimators=300,
-        random_state=42,
-        n_jobs=-1
-    ))
-])
-
-# ======================================================
-# 9. STRATIFIED K-FOLD CROSS VALIDATION
-# ======================================================
-print("\n=== STRATIFIED K-FOLD CROSS VALIDATION ===")
-
-skf = StratifiedKFold(n_splits=4, shuffle=True, random_state=42)
-
-cv_f1_macro = cross_val_score(
-    pipeline,
-    X_train_full,
-    y_train_full,
-    cv=skf,
-    scoring="f1_macro"
-)
-
-print(f"CV F1 Macro (mean): {cv_f1_macro.mean():.3f}")
-print(f"CV F1 Macro (std) : {cv_f1_macro.std():.3f}")
-
-# ======================================================
-# 10. TRAIN FINAL MODEL
-# ======================================================
-pipeline.fit(X_train_full, y_train_full)
-
-# ======================================================
-# 11. FINAL EVALUATION
-# ======================================================
-y_pred = pipeline.predict(X_test)
-y_prob = pipeline.predict_proba(X_test)
-
-print("\n=== TEST SET PERFORMANCE ===")
-print(f"Accuracy        : {accuracy_score(y_test, y_pred):.3f}")
-print(f"F1-score (Macro): {f1_score(y_test, y_pred, average='macro'):.3f}")
-print(f"F1-score (Wght) : {f1_score(y_test, y_pred, average='weighted'):.3f}")
-
-print("\nClassification Report:")
-print(classification_report(
-    y_test,
-    y_pred,
-    target_names=["Normal", "Prediabetes", "Diabetes"]
-))
-
-# ======================================================
-# 12. CONFUSION MATRIX HEATMAP
-# ======================================================
-cm = confusion_matrix(y_test, y_pred)
-
-plt.figure(figsize=(6, 5))
-sns.heatmap(
-    cm,
-    annot=True,
-    fmt="d",
-    cmap="Blues",
-    xticklabels=["Normal", "Prediabetes", "Diabetes"],
-    yticklabels=["Normal", "Prediabetes", "Diabetes"]
-)
-
-plt.xlabel("Predicted Label")
-plt.ylabel("True Label")
-plt.title("Confusion Matrix Heatmap")
-plt.tight_layout()
-plt.show()
-
-# ======================================================
-# 13. ROC AUC (OvR)
-# ======================================================
-y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
-roc_auc = roc_auc_score(
-    y_test_bin,
-    y_prob,
-    average="macro",
-    multi_class="ovr"
-)
-
-print(f"ROC AUC (OvR): {roc_auc:.3f}")
-
-# ======================================================
-# 14. SAVE MODEL
-# ======================================================
-MODEL_PATH = "rf_diabetes_multiclass.joblib"
-joblib.dump(pipeline, MODEL_PATH)
-
-print(f"\n✅ Model saved as {MODEL_PATH}")
