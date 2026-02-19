@@ -1,6 +1,6 @@
 # ======================================================
 # Multiclass Diabetes Risk Prediction
-# TOP 5 FEATURES (Highest Correlation to CLASS)
+# WITHOUT HbA1c
 # Random Forest + SMOTE + Stratified K-Fold
 # ======================================================
 
@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import joblib
 
-from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler, label_binarize
 from sklearn.ensemble import RandomForestClassifier
@@ -31,6 +31,7 @@ from imblearn.over_sampling import SMOTE
 # ======================================================
 DATA_PATH = "data/diabetes.csv"
 df = pd.read_csv(DATA_PATH)
+
 print("Dataset loaded:", df.shape)
 
 # ======================================================
@@ -83,37 +84,13 @@ df = df.drop(
 )
 
 # ======================================================
-# 6. NUMERIC FEATURES CANDIDATES
+# 6. SPLIT FEATURES & TARGET (WITHOUT HbA1c)
 # ======================================================
-numeric_features = [
-    "AGE", "BMI", "UREA", "CR",
-    "CHOL", "TG", "HDL", "LDL",
-    "VLDL", "HBA1C"
-]
-
-# ======================================================
-# 7. SELECT TOP 5 FEATURES BY CORRELATION TO CLASS
-# ======================================================
-corr_matrix = df[numeric_features + ["CLASS"]].corr()
-
-corr_to_class = (
-    corr_matrix["CLASS"]
-    .drop("CLASS")
-    .abs()
-    .sort_values(ascending=False)
-)
-
-top5_features = corr_to_class.head(5).index.tolist()
-
-print("\n=== TOP 5 FEATURES BY CORRELATION TO CLASS ===")
-for i, f in enumerate(top5_features, start=1):
-    print(f"{i}. {f} | Corr = {corr_to_class[f]:.3f}")
-
-# ======================================================
-# =================== MACHINE LEARNING =================
-# ======================================================
-X = df[top5_features]
+X = df.drop(["CLASS", "HBA1C"], axis=1, errors="ignore")
 y = df["CLASS"]
+
+print("\nTraining features (WITHOUT HbA1c):")
+print(X.columns.tolist())
 
 X_train, X_test, y_train, y_test = train_test_split(
     X,
@@ -123,6 +100,9 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
+# ======================================================
+# 7. PIPELINE (SMOTE ONLY ON TRAINING)
+# ======================================================
 pipeline = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
     ("scaler", StandardScaler()),
@@ -137,49 +117,24 @@ pipeline = Pipeline([
 # ======================================================
 # 8. STRATIFIED K-FOLD CROSS VALIDATION
 # ======================================================
+print("\n=== STRATIFIED K-FOLD CROSS VALIDATION ===")
+
 skf = StratifiedKFold(
     n_splits=4,
     shuffle=True,
     random_state=42
 )
 
-cv_acc, cv_f1 = [], []
+cv_f1_macro = cross_val_score(
+    pipeline,
+    X_train,
+    y_train,
+    cv=skf,
+    scoring="f1_macro"
+)
 
-print("\n=== STRATIFIED K-FOLD RESULTS (TOP 5 FEATURES) ===")
-for fold, (train_idx, val_idx) in enumerate(
-    skf.split(X_train, y_train), start=1
-):
-    pipeline.fit(
-        X_train.iloc[train_idx],
-        y_train.iloc[train_idx]
-    )
-
-    y_val_pred = pipeline.predict(X_train.iloc[val_idx])
-
-    acc = accuracy_score(
-        y_train.iloc[val_idx],
-        y_val_pred
-    )
-    f1 = f1_score(
-        y_train.iloc[val_idx],
-        y_val_pred,
-        average="macro"
-    )
-
-    cv_acc.append(acc)
-    cv_f1.append(f1)
-
-    print(
-        f"Fold {fold} | "
-        f"Accuracy: {acc:.3f} | "
-        f"F1 Macro: {f1:.3f}"
-    )
-
-print("\n=== CROSS-VALIDATION SUMMARY ===")
-print(f"Mean Accuracy : {np.mean(cv_acc):.3f}")
-print(f"Std Accuracy  : {np.std(cv_acc):.3f}")
-print(f"Mean F1 Macro : {np.mean(cv_f1):.3f}")
-print(f"Std F1 Macro  : {np.std(cv_f1):.3f}")
+print(f"CV F1 Macro (mean): {cv_f1_macro.mean():.3f}")
+print(f"CV F1 Macro (std) : {cv_f1_macro.std():.3f}")
 
 # ======================================================
 # 9. TRAIN FINAL MODEL
@@ -192,7 +147,7 @@ pipeline.fit(X_train, y_train)
 y_pred = pipeline.predict(X_test)
 y_prob = pipeline.predict_proba(X_test)
 
-print("\n=== TEST SET PERFORMANCE (TOP 5 FEATURES) ===")
+print("\n=== TEST SET PERFORMANCE (WITHOUT HbA1c) ===")
 print(f"Accuracy        : {accuracy_score(y_test, y_pred):.3f}")
 print(f"F1-score (Macro): {f1_score(y_test, y_pred, average='macro'):.3f}")
 print(f"F1-score (Wght): {f1_score(y_test, y_pred, average='weighted'):.3f}")
@@ -205,7 +160,7 @@ print(classification_report(
 ))
 
 # ======================================================
-# 11. ROC AUC (One-vs-Rest)
+# 11. ROC AUC (OvR)
 # ======================================================
 y_test_bin = label_binarize(y_test, classes=[0, 1, 2])
 
@@ -221,11 +176,7 @@ print(f"ROC AUC (OvR): {roc_auc:.3f}")
 # ======================================================
 # 12. SAVE MODEL
 # ======================================================
-MODEL_PATH = "rf_diabetes_top5_correlation_features.joblib"
+MODEL_PATH = "rf_diabetes_without_hba1c.joblib"
+joblib.dump(pipeline, MODEL_PATH)
 
-joblib.dump(
-    pipeline,
-    MODEL_PATH
-)
-
-print(f"\n✅ Model saved successfully: {MODEL_PATH}")
+print(f"\n✅ Model saved as {MODEL_PATH}")
