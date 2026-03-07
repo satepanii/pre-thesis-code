@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import joblib
 
+
 # ======================================================
 # PAGE CONFIG
 # ======================================================
@@ -9,6 +10,7 @@ st.set_page_config(
     page_title="Diabetes Risk Analysis",
     layout="centered"
 )
+
 
 # ======================================================
 # TITLE & INTRO
@@ -19,12 +21,13 @@ st.write(
     """
     Aplikasi ini menganalisis **tingkat risiko diabetes**
     (**Normal / Prediabetes / Diabetes**) menggunakan algoritma
-    **Random Forest**.
+    **Random Forest** berbasis Machine Learning.
 
     ⚠️ *Hasil yang ditampilkan merupakan analisis risiko relatif
-    berbasis data klinis, **bukan diagnosis medis**.*
+    berbasis data klinis, bukan diagnosis medis.*
     """
 )
+
 
 # ======================================================
 # DATASET INFO
@@ -37,24 +40,28 @@ with st.expander("📊 Dataset Information"):
         and Diabetes – Iraq).
 
         Dataset berisi informasi medis dan hasil pemeriksaan laboratorium,
-        sehingga hasil prediksi merepresentasikan risiko relatif
-        dalam konteks klinis.
+        sehingga hasil prediksi merepresentasikan **risiko relatif dalam
+        konteks klinis**, bukan populasi umum.
         """
     )
 
+
 # ======================================================
-# LOAD MODEL
+# LOAD MODEL (ALL FEATURES VERSION)
 # ======================================================
-MODEL_PATH = "rf_diabetes_without_hba1c.joblib"
+MODEL_PATH = "rf_diabetes_all_features.joblib"
 model = joblib.load(MODEL_PATH)
+
 
 # ======================================================
 # INPUT FORM
 # ======================================================
 st.subheader("🧍 Patient Information")
 
+# ---------------- BASIC INFO ----------------
 gender = st.selectbox("Gender", ["Female", "Male"])
 age = st.number_input("Age (years)", 0, 120, 30)
+
 
 # ======================================================
 # BMI
@@ -63,111 +70,124 @@ st.info(
     """
     **Body Mass Index (BMI)** menunjukkan status berat badan terhadap tinggi badan.
 
-    📌 **Rentang normal:** 18.5 – 24.9 kg/m²  
+    📌 Rentang normal: 18.5 – 24.9 kg/m²  
     📌 BMI tinggi sering dikaitkan dengan resistensi insulin.
     """
 )
 bmi = st.number_input("BMI (kg/m²)", 0.0, 60.0, 23.0)
+
+
+# ======================================================
+# HbA1c
+# ======================================================
+st.info(
+    """
+    **HbA1c (Hemoglobin A1c)** menunjukkan rata-rata kadar gula darah 
+    selama 2–3 bulan terakhir.
+
+    📌 Normal      : < 5.7%  
+    📌 Prediabetes : 5.7 – 6.4%  
+    📌 Diabetes    : ≥ 6.5%
+    """
+)
+hba1c = st.number_input("HbA1c (%)", 0.0, 20.0, 5.5)
+
 
 # ======================================================
 # CHOLESTEROL
 # ======================================================
 st.info(
     """
-    **Total Cholesterol** menggambarkan kadar lemak total dalam darah.
+    **Total Cholesterol**
 
-    📌 **Nilai normal:** < 5.2 mmol/L  
-    📌 Kadar tinggi berhubungan dengan gangguan metabolik.
+    📌 Nilai normal: < 200 mg/dL
     """
 )
-chol = st.number_input("Total Cholesterol (mmol/L)", 0.0, 20.0, 5.0)
+chol = st.number_input("Total Cholesterol (mg/dL)", 0.0, 400.0, 180.0)
+
 
 # ======================================================
 # TRIGLYCERIDES
 # ======================================================
 st.info(
     """
-    **Triglycerides (TG)** adalah jenis lemak darah utama.
+    **Triglycerides (TG)**
 
-    📌 **Nilai normal:** < 1.7 mmol/L  
-    📌 Nilai tinggi sering dikaitkan dengan sindrom metabolik.
+    📌 Nilai normal: < 150 mg/dL
     """
 )
-tg = st.number_input("Triglycerides (mmol/L)", 0.0, 15.0, 1.5)
+tg = st.number_input("Triglycerides (mg/dL)", 0.0, 500.0, 120.0)
+
 
 # ======================================================
 # HDL
 # ======================================================
 st.info(
     """
-    **HDL (High-Density Lipoprotein)** dikenal sebagai kolesterol baik.
+    **HDL (Kolesterol Baik)**
 
-    📌 **Nilai normal:**  
-    - Pria  > 1.0 mmol/L  
-    - Wanita > 1.3 mmol/L  
-
-    📌 HDL tinggi bersifat protektif terhadap diabetes.
+    📌 Pria  > 40 mg/dL  
+    📌 Wanita > 50 mg/dL
     """
 )
-hdl = st.number_input("HDL (mmol/L)", 0.0, 5.0, 1.3)
+hdl = st.number_input("HDL (mg/dL)", 0.0, 150.0, 50.0)
+
 
 # ======================================================
 # LDL
 # ======================================================
 st.info(
     """
-    **LDL (Low-Density Lipoprotein)** dikenal sebagai kolesterol jahat.
+    **LDL (Kolesterol Jahat)**
 
-    📌 **Nilai optimal:** < 2.6 mmol/L  
-    📌 LDL tinggi meningkatkan risiko penyakit metabolik.
+    📌 Nilai optimal: < 100 mg/dL
     """
 )
-ldl = st.number_input("LDL (mmol/L)", 0.0, 15.0, 2.5)
+ldl = st.number_input("LDL (mg/dL)", 0.0, 300.0, 100.0)
+
 
 # ======================================================
 # VLDL
 # ======================================================
 st.info(
     """
-    **VLDL (Very Low-Density Lipoprotein)** membawa trigliserida dalam darah.
+    **VLDL**
 
-    📌 **Nilai normal:** 0.1 – 1.0 mmol/L  
-    📌 Sering meningkat pada gangguan metabolisme lemak.
+    📌 Nilai normal: 5 – 40 mg/dL
     """
 )
-vldl = st.number_input("VLDL (mmol/L)", 0.0, 5.0, 0.5)
+vldl = st.number_input("VLDL (mg/dL)", 0.0, 100.0, 25.0)
+
 
 # ======================================================
 # UREA
 # ======================================================
 st.info(
     """
-    **Urea** merupakan indikator fungsi ginjal.
+    **Urea**
 
-    📌 **Nilai normal:** 2.5 – 7.1 mmol/L  
-    📌 Diabetes jangka panjang dapat memengaruhi kadar urea.
+    📌 Nilai normal: 15 – 45 mg/dL
     """
 )
-urea = st.number_input("Urea (mmol/L)", 0.0, 30.0, 5.0)
+urea = st.number_input("Urea (mg/dL)", 0.0, 100.0, 30.0)
+
 
 # ======================================================
 # CREATININE
 # ======================================================
 st.info(
     """
-    **Creatinine** digunakan untuk menilai fungsi ginjal.
+    **Creatinine**
 
-    📌 **Nilai normal:**  
-    - Pria    : 60 – 110 µmol/L  
-    - Wanita  : 45 – 90 µmol/L  
-
-    📌 Gangguan ginjal sering menjadi komplikasi diabetes.
+    📌 Pria   : 0.7 – 1.3 mg/dL  
+    📌 Wanita : 0.6 – 1.1 mg/dL
     """
 )
-cr = st.number_input("Creatinine (µmol/L)", 0.0, 2000.0, 90.0)
+cr = st.number_input("Creatinine (mg/dL)", 0.0, 10.0, 1.0)
+
 
 # ======================================================
-# PREPARE INPUT
+# PREPARE INPUT DATAFRAME
 # ======================================================
 input_df = pd.DataFrame([{
     "GENDER": 1 if gender == "Male" else 0,
@@ -179,13 +199,20 @@ input_df = pd.DataFrame([{
     "HDL": hdl,
     "LDL": ldl,
     "VLDL": vldl,
-    "BMI": bmi
+    "BMI": bmi,
+    "HBA1C": hba1c
 }])
+
+
+# ⚠️ Pastikan urutan kolom sama dengan model
+input_df = input_df[model.feature_names_in_]
+
 
 # ======================================================
 # PREDICTION
 # ======================================================
 if st.button("🔍 Analyze Risk"):
+
     probs = model.predict_proba(input_df)[0]
 
     p_normal, p_pre, p_diab = probs

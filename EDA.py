@@ -1,15 +1,3 @@
-# ======================================================
-# EXPLORATORY DATA ANALYSIS (EDA)
-# Multiclass Diabetes Dataset
-# ======================================================
-# + NA Check
-# + Summary Statistics
-# + Class Distribution
-# + HbA1c Quartile Analysis
-# + Normality Check
-# + Correlation Matrix (Including CLASS)
-# ======================================================
-
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -51,9 +39,13 @@ df["GENDER"] = (
 df["CLASS"] = (
     df["CLASS"]
     .astype(str)
+    .str.strip()  
     .str.upper()
-    .map({"N": 0, "P": 1, "Y": 2})
+    .map({"N":0,"P":1,"Y":2})
 )
+
+print(df["CLASS"].unique())
+
 
 df = df.dropna(subset=["CLASS"])
 df["CLASS"] = df["CLASS"].astype(int)
@@ -194,7 +186,8 @@ for feature in numeric_features:
 # ======================================================
 plt.figure(figsize=(13, 11))
 
-corr = df.drop(["CLASS", "HBA1C"], axis=1).corr()
+
+corr = df.select_dtypes(include=[np.number]).corr()
 
 sns.heatmap(
     corr,
@@ -206,6 +199,6 @@ sns.heatmap(
     cbar_kws={"shrink": 0.8}
 )
 
-plt.title("Feature Correlation Heatmap (Risk Factors)", fontsize=14)
+plt.title("Feature Correlation Heatmap (Including CLASS)", fontsize=14)
 plt.tight_layout()
 plt.show()

@@ -2,7 +2,7 @@
 # Multiclass Diabetes Risk Prediction
 # ALL FEATURES
 # Random Forest + SMOTE + Stratified K-Fold
-# NO EDA
+# WITH DATA COUNT BEFORE & AFTER SMOTE
 # ======================================================
 
 import warnings
@@ -26,12 +26,14 @@ from sklearn.metrics import (
 from imblearn.pipeline import Pipeline
 from imblearn.over_sampling import SMOTE
 
+
 # ======================================================
 # 1. LOAD DATASET
 # ======================================================
 DATA_PATH = "data/diabetes.csv"
 df = pd.read_csv(DATA_PATH)
 print("Dataset loaded:", df.shape)
+
 
 # ======================================================
 # 2. NORMALIZE COLUMN NAMES
@@ -43,6 +45,7 @@ df.columns = (
     .str.replace(" ", "_")
     .str.replace("-", "_")
 )
+
 
 # ======================================================
 # 3. ENCODE CATEGORICAL VARIABLES
@@ -64,8 +67,9 @@ df["CLASS"] = (
 df = df.dropna(subset=["CLASS"])
 df["CLASS"] = df["CLASS"].astype(int)
 
-print("\nClass distribution:")
+print("\nClass distribution (Full Dataset):")
 print(df["CLASS"].value_counts().sort_index())
+
 
 # ======================================================
 # 4. NUMERIC CONVERSION
@@ -73,6 +77,7 @@ print(df["CLASS"].value_counts().sort_index())
 for col in df.columns:
     if col not in ["CLASS", "GENDER"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
+
 
 # ======================================================
 # 5. DROP ID COLUMNS
@@ -82,8 +87,9 @@ df = df.drop(
     errors="ignore"
 )
 
+
 # ======================================================
-# 6. SPLIT FEATURES & TARGET (ALL FEATURES)
+# 6. SPLIT FEATURES & TARGET
 # ======================================================
 X = df.drop("CLASS", axis=1)
 y = df["CLASS"]
@@ -99,8 +105,30 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state=42
 )
 
+
 # ======================================================
-# 7. PIPELINE (SMOTE ONLY ON TRAINING)
+# INFO DATA BEFORE SMOTE
+# ======================================================
+print("\n=== DATA BEFORE SMOTE ===")
+print("Training set shape:", X_train.shape)
+print("Class distribution (Train):")
+print(y_train.value_counts().sort_index())
+
+
+# ======================================================
+# APPLY SMOTE (ANALYSIS PURPOSE ONLY)
+# ======================================================
+smote = SMOTE(random_state=42)
+X_train_sm, y_train_sm = smote.fit_resample(X_train, y_train)
+
+print("\n=== DATA AFTER SMOTE ===")
+print("Resampled training set shape:", X_train_sm.shape)
+print("Class distribution (After SMOTE):")
+print(pd.Series(y_train_sm).value_counts().sort_index())
+
+
+# ======================================================
+# 7. PIPELINE (SMOTE ONLY INSIDE TRAINING)
 # ======================================================
 pipeline = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
@@ -112,6 +140,7 @@ pipeline = Pipeline([
         n_jobs=-1
     ))
 ])
+
 
 # ======================================================
 # 8. STRATIFIED K-FOLD CROSS VALIDATION
@@ -135,10 +164,12 @@ cv_f1_macro = cross_val_score(
 print(f"CV F1 Macro (mean): {cv_f1_macro.mean():.3f}")
 print(f"CV F1 Macro (std) : {cv_f1_macro.std():.3f}")
 
+
 # ======================================================
 # 9. TRAIN FINAL MODEL
 # ======================================================
 pipeline.fit(X_train, y_train)
+
 
 # ======================================================
 # 10. TEST SET EVALUATION
@@ -158,6 +189,7 @@ print(classification_report(
     target_names=["Normal", "Prediabetes", "Diabetes"]
 ))
 
+
 # ======================================================
 # 11. ROC AUC (OvR)
 # ======================================================
@@ -171,6 +203,7 @@ roc_auc = roc_auc_score(
 )
 
 print(f"ROC AUC (OvR): {roc_auc:.3f}")
+
 
 # ======================================================
 # 12. SAVE MODEL

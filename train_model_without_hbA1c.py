@@ -58,8 +58,9 @@ df["GENDER"] = (
 df["CLASS"] = (
     df["CLASS"]
     .astype(str)
+    .str.strip()  
     .str.upper()
-    .map({"N": 0, "P": 1, "Y": 2})
+    .map({"N":0,"P":1,"Y":2})
 )
 
 df = df.dropna(subset=["CLASS"])
@@ -101,7 +102,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )
 
 # ======================================================
-# 7. PIPELINE (SMOTE ONLY ON TRAINING)
+# 7. PIPELINE
 # ======================================================
 pipeline = Pipeline([
     ("imputer", SimpleImputer(strategy="median")),
